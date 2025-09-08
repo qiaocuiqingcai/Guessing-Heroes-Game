@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>猜英雄</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        /* 设置按钮的位置 */
+        .open-button {
+            position: fixed;  /* 固定定位 */
+            top: 20px;        /* 距离顶部20px */
+            right: 20px;      /* 距离右边20px */
+            padding: 10px 20px; /* 按钮的内边距 */
+            background-color: #ffa1c0; /* 按钮背景色 */
+            color: white;     /* 按钮文字颜色 */
+            border: none;     /* 去除按钮边框 */
+            border-radius: 10px; /* 圆角 */
+            cursor: pointer;  /* 鼠标悬停时显示手指 */
+            font-size: 11px;   /* 字体大小 */
+        }
+
+        .open-button:hover {
+            background-color: #45a049; /* 鼠标悬停时按钮背景色 */
+        }
+    </style>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px;
+        }
+
+        h2 {
+            text-align: center;
+        }
+
+        form {
+            margin: 10px;
+        }
+
+        .guess-box {
+            display: flex;
+            flex-direction: row; /* 横向排列 */
+            align-items: center;
+            justify-content: flex-start;
+            background: white;
+            padding: 10px 20px;
+            margin: 10px 0;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            width: fit-content;
+            gap: 15px; /* 设置卡片之间的间距 */
+        }
+
+        /* 将名字放置在图片上方 */
+        .guess-box .info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .guess-box img {
+            height: 80px;
+            border-radius: 10px;
+            margin-bottom: 10px; /* 图片下方间距 */
+        }
+
+        .guess-fields {
+            display: flex;
+            display: flex;
+            flex-direction: column; /* 纵向排列 */
+            justify-content: center; /* 垂直居中 */
+            align-items: center; /* 水平居中 */
+            text-align: center; /* 确保文字居中 */
+            flex-direction: row; /* 横向排列字段 */
+            gap: 20px; /* 设置字段间的间距 */
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column; /* 纵向排列 */
+            justify-content: center; /* 垂直居中 */
+            align-items: center; /* 水平居中 */
+            text-align: center; /* 确保文字居中 */
+            padding: 5px 10px;
+            border-radius: 6px;
+        }
+
+        .correct { background-color: #b6fcb6; }
+        .wrong { background-color: #e0e0e0; }
+
+        .up::after { content: " ↑"; color: green; }
+        .down::after { content: " ↓"; color: red; }
+
+        #configForm, #guessForm {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        input[type="text"], input[type="number"] {
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            padding: 5px 12px;
+            border: none;
+            border-radius: 5px;
+            background-color: #4caf50;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #surrenderBtn {
+            background-color: #f44336;
+        }
+
+        #surrenderBtn:hover {
+            background-color: #d32f2f !important;
+        }
+
+        .status {
+            margin-top: 30px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            text-align: center;
+        }
+
+        .celebrate span {
+            font-size: 48px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <form action="/switch_mode" method="POST">
+        <button type="submit" name="mode" value="lol" style="font-size: 20px; padding: 13px 26px;background-color: #FF5722;">LOL模式</button>
+        <button type="submit" name="mode" value="wangzhe" style="font-size: 20px; padding: 13px 26px;background-color: #FF5722;">王者模式</button>
+    </form>
+    <button class="open-button" onclick="openNewTab()">作者主页</button>
+    <h1 id="game-title">猜英雄小游戏</h1>
+
+    <script>
+        // 页面加载时检测URL并修改标题
+        document.addEventListener('DOMContentLoaded', function() {
+            const title = document.getElementById('game-title');
+            if (window.location.pathname.includes('/lol')) {
+                title.textContent = '英雄联盟猜英雄小游戏';
+            } else {
+                title.textContent = '王者荣耀猜英雄小游戏';
+            }
+        });
+    </script>
+    <div>制作者：<strong>不爱唠嗑的芒果</strong></div>
+    
+    <div>系统会根据玩家的猜测输入给出反馈：</div>
+    <div>如果猜测与答案匹配，则显示为<span style="color: green;">绿色</span>。否则是<span style="color: grey;">灰色</span></div>
+    <div>如果是数值，则会显示高于（<span style="color: green;">↑</span>）或低于（<span style="color: red;">↓</span>）提示。</div>
+
+    <form id="configForm">
+        <!-- 设置猜测次数： -->
+        <!-- <input type="number" name="max_attempts" value="{{ max_attempts }}" min="1" autocomplete="off"> -->
+        <!-- <button type="submit">开始游戏/重新开始</button> -->
+        <button type="submit" style="padding: 12px 24px; font-size: 36px; background-color: #4caf50; color: white; border: none; border-radius: 8px; cursor: pointer;">
+            开始游戏/重新开始
+        </button>
+        
+    </form>
+
+    <!-- <form method="POST" id="guessForm">
+        <input id="heroInput" name="hero" list="heroList" placeholder="请输入猜测的英雄名" autocomplete="off">
+        <datalist id="heroList"></datalist>
+        <button type="submit">确定</button>
+        <button type="button" id="surrenderBtn">公布答案</button>
+    </form> -->
+    <form method="POST" id="guessForm" style="margin: 20px 0; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+        <div style="display: flex; gap: 15px; align-items: center; justify-content: center;">
+            <input id="heroInput" name="hero" list="heroList" placeholder="" autocomplete="off" 
+                   style="padding: 12px; font-size: 16px; width: 300px; border: 2px solid #ccc; border-radius: 8px;">
+            <datalist id="heroList"></datalist>
+            <button type="submit" style="padding: 12px 24px; font-size: 28px; background-color: #00aeec; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                确定
+            </button>
+            <button type="button" id="surrenderBtn" style="padding: 12px 24px; font-size: 28px; background-color: #f44336; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                投降<span>🏳️</span>
+            </button>
+        </div>
+    </form>
+    
+    <script>
+        // 页面加载时设置placeholder
+        document.addEventListener('DOMContentLoaded', function() {
+            const heroInput = document.getElementById('heroInput');
+            
+            // 检查当前URL路径
+            if (window.location.pathname.includes('/lol')) {
+                heroInput.placeholder = "请输入猜测的英雄，如小炮，安妮";
+            } else {
+                heroInput.placeholder = "请输入猜测的英雄名，如小乔";
+            }
+        });
+    </script>
+
+    <p>本轮尝试次数：{{ attempts }}</p>
+
+    {% if has_surrendered %}
+    <div class="status">
+        <span>🏳️</span> 正确答案是：{{ answer_name }}
+    </div>
+    <div class="guess-box">
+        <div class="info">
+            <strong>{{ answer_name }}</strong>
+            <img src="{{ url_for('static', filename=image_folder + '/' + answer_name + '.jpg') }}" alt="{{ answer_name }}">
+        </div>
+        <div>
+            <div class="guess-fields">
+                {% for field in answer_fields %}
+                <div class="field correct">
+                    <div><strong>{{ field.名称 }}</strong></div>
+                <div>{{ field.值 }}</div></div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if has_failed %}
+    <div class="status">
+        <span>超次数啦！</span> 正确答案是：{{ answer_name }}
+    </div>
+    <div class="guess-box">
+        <div class="info">
+            <strong>{{ answer_name }}</strong>
+            <img src="{{ url_for('static', filename=image_folder + '/' + answer_name + '.jpg') }}" alt="{{ answer_name }}">
+        </div>
+        <div>
+            <div class="guess-fields">
+                {% for field in answer_fields %}
+                <div class="field correct">
+                    <div><strong>{{ field.名称 }}</strong></div>
+                <div>{{ field.值 }}</div></div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    
+
+    {% for guess in guesses|reverse %}
+    <div class="guess-box">
+        <div class="info">
+            <strong>{{ guess.英雄名 }}</strong>
+            <img src="{{ url_for('static', filename=image_folder + '/' + guess.英雄名 + '.jpg') }}" alt="{{ guess.英雄名 }}">
+        </div>
+        <div>
+            <div class="guess-fields">
+                {% for item in guess.字段 %}
+                <div class="field {{ item.状态 }}">
+                    <div><strong>{{ item.名称 }}</strong></div>
+                <div>{{ item.值 }}</div></div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% if has_won %}
+    <div class="status celebrate">
+        <span>🎉</span> 恭喜你猜对了！正确答案是：{{ answer_name }}
+    </div>
+    <script>
+        confetti({
+            particleCount: 150,
+            spread: 100,
+            origin: { y: 0.6 }
+        });
+    </script>
+    {% endif %}
+
+    <script>
+        const input = document.getElementById("heroInput");
+        const datalist = document.getElementById("heroList");
+
+        let debounceTimeout;
+        input.addEventListener("input", () => {
+            clearTimeout(debounceTimeout);
+            debounceTimeout = setTimeout(() => {
+                const prefix = input.value;
+                axios.get(`/autocomplete?prefix=${prefix}`).then(res => {
+                    datalist.innerHTML = "";
+                    res.data.forEach(name => {
+                        const option = document.createElement("option");
+                        option.value = name;
+                        datalist.appendChild(option);
+                    });
+                });
+            }, 300);  // 300毫秒的延迟
+        });
+
+        // document.getElementById("configForm").addEventListener("submit", e => {
+        //     e.preventDefault();
+        //     const formData = new FormData(e.target);
+        //     axios.post("/start", formData).then(() => location.reload());
+        // });
+            
+        document.getElementById("surrenderBtn").addEventListener("click", () => {
+            if(confirm("确定要投降吗？将直接显示正确答案。")) {
+                axios.post("/surrender").then(() => location.reload());
+            }
+        });
+    </script>
+        <script>
+            function openNewTab() {
+                // 在新标签页打开指定的网址
+                window.open('https://space.bilibili.com/52034298', '_blank');
+            }
+        </script>
+        <script>
+            document.getElementById("guessForm").addEventListener("submit", function (e) {
+                // 允许正常提交（POST 到后端）
+                setTimeout(() => {
+                    document.getElementById("heroInput").focus();
+                }, 100);  // 使用 setTimeout 是为了确保页面渲染完后重新聚焦
+            });
+        </script>
+   <!-- <script>
+    document.getElementById("configForm").addEventListener("submit", function(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        
+        // 清空英雄输入框
+        document.getElementById("heroInput").value = "0";
+        
+        // 提交表单并刷新页面
+        axios.post("/start", formData).then(() => {
+            location.reload();
+        });
+    });
+</script> -->
+
+<script>
+    document.getElementById("configForm").addEventListener("submit", function(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        
+        // 提交开始游戏表单
+        axios.post("/start", formData).then(() => {
+            // 模拟点击"确定"按钮
+            document.getElementById("heroInput").value = "";
+            document.querySelector("#guessForm button[type='submit']").click();
+            
+        
+            
+        });
+    });
+</script>
+</body>
+</html>
