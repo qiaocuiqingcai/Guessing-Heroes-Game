@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理系统 - {% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>用户管理系统</h1>
+            {% if session.username %}
+                <nav>
+                    <span>欢迎, {{ session.username }}!</span>
+                    <a href="{{ url_for('dashboard') }}">控制台</a>
+                    {% if session.user_id == 1 %}
+                        <a href="{{ url_for('admin_panel') }}">管理面板</a>
+                    {% endif %}
+                    <a href="{{ url_for('logout') }}">退出</a>
+                </nav>
+            {% endif %}
+        </header>
+
+        <main>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash {{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

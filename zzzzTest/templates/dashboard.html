@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}控制台{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h2>用户控制台</h2>
+    <div class="user-info">
+        <h3>用户信息</h3>
+        <p><strong>用户ID:</strong> {{ user.id }}</p>
+        <p><strong>用户名:</strong> {{ user.username }}</p>
+        <p><strong>账户余额:</strong> {{ user.money }} 元</p>
+    </div>
+</div>
+{% endblock %}

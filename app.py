@@ -1,31 +1,124 @@
-from flask import Flask, render_template, request, jsonify, session,redirect
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 import pandas as pd
-import random
-import os
+from wangzhe import wangzhe_game, wangzhe_autocomplete, new_wangzhe_round
+from lol import lol_game, lol_autocomplete, new_lol_round
+from user_manager import UserManager
 
 app = Flask(__name__)
 app.secret_key = 'guess-hero-secret'
 
-# 读取数据
+# 初始化用户管理器
+user_manager = UserManager('userdata.xlsx')
 
+@app.route('/', methods=['GET'])
+def index():
+    """首页 - 如果已登录则重定向到选择页面，否则重定向到登录页面"""
+    if 'username' in session:
+        return redirect(url_for('select'))
+    return redirect(url_for('login'))
 
-# 字段顺序控制
-# FIELDS = ['职业', '皮肤数量', '保留项1']
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """用户登录页面"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if user_manager.verify_user(username, password):
+            session['username'] = username
+            user_data = user_manager.get_user_data(username)
+            session['user_data'] = user_data
+            flash('登录成功！', 'success')
+            return redirect(url_for('select'))
+        else:
+            flash('用户名或密码错误！', 'error')
+    
+    return render_template('login.html')
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """用户注册页面"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if password != confirm_password:
+            flash('两次输入的密码不一致！', 'error')
+            return render_template('register.html')
+        
+        if user_manager.user_exists(username):
+            flash('用户名已存在！', 'error')
+            return render_template('register.html')
+        
+        user_manager.add_user(username, password)
+        flash('注册成功，请登录！', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('register.html')
+
+@app.route('/logout')
+def logout():
+    """用户登出"""
+    session.clear()
+    flash('您已成功登出！', 'success')
+    return redirect(url_for('login'))
+
+@app.route('/user_profile')
+def user_profile():
+    """用户个人资料页面"""
+    if 'username' not in session:
+        flash('请先登录！', 'error')
+        return redirect(url_for('login'))
+    
+    username = session['username']
+    user_data = user_manager.get_user_data(username)
+    
+    return render_template('user_profile.html', user=user_data)
+
+@app.route('/clear_history', methods=['POST'])
+def clear_history():
+    """清除用户游戏历史记录"""
+    if 'username' not in session:
+        flash('请先登录！', 'error')
+        return redirect(url_for('login'))
+    
+    username = session['username']
+    game_type = request.form.get('game_type', 'all')
+    
+    user_manager.clear_user_history(username, game_type)
+    flash('游戏历史记录已清除！', 'success')
+    
+    # 更新session中的用户数据
+    session['user_data'] = user_manager.get_user_data(username)
+    
+    return redirect(url_for('user_profile'))
+
+@app.route('/select', methods=['GET', 'POST'])
 def select():
+    """游戏模式选择页面"""
+    if 'username' not in session:
+        flash('请先登录！', 'error')
+        return redirect(url_for('login'))
+    
     if request.method == 'POST':
         mode = request.form.get('mode')
         if mode == 'lol':
             session['game_mode'] = 'lol'
-            return redirect('/lol')
+            return redirect(url_for('lol_index'))
         else:
             session['game_mode'] = 'wangzhe'
-            return redirect('/wangzhe')
-    return render_template('select.html')  # 创建这个模板文件
+            return redirect(url_for('wangzhe_index'))
+    
+    return render_template('select.html', user=session.get('user_data'))
 
 @app.route('/switch_mode', methods=['POST'])
 def switch_mode():
+    """切换游戏模式"""
+    if 'username' not in session:
+        flash('请先登录！', 'error')
+        return redirect(url_for('login'))
+    
     mode = request.form.get('mode')
     if mode == 'lol':
         session['game_mode'] = 'lol'
@@ -34,295 +127,96 @@ def switch_mode():
     
     # 强制重置游戏
     max_attempts = session.get('max_attempts', 5)
-    session.clear()  # 清空所有session
-    session['game_mode'] = mode  # 重新设置模式
-    session['max_attempts'] = max_attempts  # 保留尝试次数设置
+    username = session['username']
+    user_data = session.get('user_data')
+    
+    # 保留用户信息，清空游戏相关session
+    session.pop('answer', None)
+    session.pop('guesses', None)
+    session.pop('has_surrendered', None)
+    session.pop('has_failed', None)
+    
+    # 重新设置模式和尝试次数
+    session['game_mode'] = mode
+    session['max_attempts'] = max_attempts
     new_round()  # 开始新游戏
     
     # 根据当前模式重定向
     if mode == 'lol':
-        return redirect('/lol')
+        return redirect(url_for('lol_index'))
     else:
-        return redirect('/wangzhe')
-
-
-# @app.route('/lol', methods=['GET', 'POST'])
-# def newindex():
-#     FIELDS = [
-#     '分路', '职业','地区','攻击距离',  '上线时间'
-# ]
-#     df = pd.read_excel('heroes_lol.xlsx')
-#     df.columns = df.columns.str.strip()  # 去除列名空格
-#     HERO_NAMES = df['英雄名'].tolist()
-#     if 'answer' not in session:
-#         new_round()
-
-#     message = ''
-#     guesses = session.get('guesses', [])
-#     max_attempts = session.get('max_attempts', 5)
-#     current_attempt = len(guesses)
-#     answer_fields = []
-#     has_failed = False
-
-#     # 检查是否失败（超过最大尝试次数）
-#     if current_attempt >= max_attempts and not check_win(guesses):
-#         has_failed = True
-#         session['has_failed'] = True
-
-#     # 准备正确答案的字段数据（失败或投降时显示）
-#     if session.get('has_failed', False) or session.get('has_surrendered', False):
-#         answer_data = session['answer']
-#         for field in FIELDS:
-#             answer_fields.append({
-#                 '名称': field,
-#                 '值': answer_data.get(field, 'N/A')
-#             })
-
-#     if request.method == 'POST':
-#         guess_name = request.form['hero'].strip()
-#         if guess_name not in HERO_NAMES:
-#             message = f"英雄 [{guess_name}] 不存在。"
-#         else:
-#             guess_data = df[df['英雄名'] == guess_name].iloc[0].to_dict()
-#             answer_data = session['answer']
-
-#             result = {
-#                 '英雄名': guess_name,
-#                 '字段': []
-#             }
-
-#             for field in FIELDS:
-#                 try:
-#                     guess_value = guess_data[field]
-#                     answer_value = answer_data[field]
-
-#                     if guess_value == answer_value:
-#                         status = 'correct'
-#                     elif isinstance(answer_value, (int, float)) and isinstance(guess_value, (int, float)):
-#                         status = 'up' if guess_value < answer_value else 'down'
-#                     else:
-#                         status = 'wrong'
-#                 except KeyError:
-#                     status = 'wrong'
-#                     guess_value = 'N/A'
-
-#                 result['字段'].append({
-#                     '名称': field,
-#                     '值': guess_value,
-#                     '状态': status
-#                 })
-
-#             guesses.append(result)
-#             session['guesses'] = guesses
-#             current_attempt += 1
-#     return render_template('index.html',
-#                           guesses=guesses,
-#                           attempts=f"{current_attempt}/{max_attempts}",
-#                           max_attempts=max_attempts,
-#                           has_won=check_win(guesses),
-#                           has_failed=session.pop('has_failed', False),
-#                           has_surrendered=session.pop('has_surrendered', False),
-#                           answer_name=session['answer']['英雄名'],
-#                           answer_fields=answer_fields,
-#                           image_folder='date')
+        return redirect(url_for('wangzhe_index'))
 
 @app.route('/lol', methods=['GET', 'POST'])
-def newindex():
-    FIELDS = [
-        '分路', '职业', '地区','带位移','攻击距离', '上线时间','外号'
-    ]
-    df = pd.read_excel('heroes_lol.xlsx')
-    df.columns = df.columns.str.strip()  # 去除列名空格
-
-    # 创建一个包含中文名、英文名和称号的统一列表
-    HERO_NAMES = df['英雄名'].tolist() + df['英文名'].tolist() + df['称号'].tolist()+df['外号'].tolist()
-
-    if 'answer' not in session:
-        new_round()
-
-    message = ''
-    guesses = session.get('guesses', [])
-    max_attempts = session.get('max_attempts', 5)
-    current_attempt = len(guesses)
-    answer_fields = []
-    has_failed = False
-
-    # 检查是否失败（超过最大尝试次数）
-    if current_attempt >= max_attempts and not check_win(guesses):
-        has_failed = True
-        session['has_failed'] = True
-
-    # 准备正确答案的字段数据（失败或投降时显示）
-    if session.get('has_failed', False) or session.get('has_surrendered', False):
-        answer_data = session['answer']
-        for field in FIELDS:
-            answer_fields.append({
-                '名称': field,
-                '值': answer_data.get(field, 'N/A')
-            })
-
-    if request.method == 'POST':
-        guess_name = request.form['hero'].strip()
-
-        # 检查用户输入的名称是否在 HERO_NAMES 列表中
-        if guess_name not in HERO_NAMES:
-            message = f"英雄 [{guess_name}] 不存在。"
-        else:
-            # 找到匹配的英雄并获取其详细数据
-            if guess_name in df['英雄名'].values:
-                # 如果输入的是英雄中文名，直接使用该名
-                guess_name_unified = guess_name
-                guess_data = df[df['英雄名'] == guess_name].iloc[0].to_dict()
-            elif guess_name in df['英文名'].values:
-                # 如果输入的是英文名，统一转换为对应的英雄中文名
-                guess_name_unified = df[df['英文名'] == guess_name]['英雄名'].iloc[0]
-                guess_data = df[df['英文名'] == guess_name].iloc[0].to_dict()
-            elif guess_name in df['称号'].values:
-                # 如果输入的是称号，统一转换为对应的英雄中文名
-                guess_name_unified = df[df['称号'] == guess_name]['英雄名'].iloc[0]
-                guess_data = df[df['称号'] == guess_name].iloc[0].to_dict()
-            else:
-                # 如果输入的是外号，统一转换为对应的英雄中文名
-                guess_name_unified = df[df['外号'] == guess_name]['英雄名'].iloc[0]
-                guess_data = df[df['外号'] == guess_name].iloc[0].to_dict()
-        
-
-            answer_data = session['answer']
-
-            result = {
-                '英雄名': guess_name_unified,  # 使用统一后的英雄名
-                '字段': []
-            }
-
-            for field in FIELDS:
-                try:
-                    guess_value = guess_data[field]
-                    answer_value = answer_data[field]
-
-                    if guess_value == answer_value:
-                        status = 'correct'
-                    elif isinstance(answer_value, (int, float)) and isinstance(guess_value, (int, float)):
-                        status = 'up' if guess_value < answer_value else 'down'
-                    else:
-                        status = 'wrong'
-                except KeyError:
-                    status = 'wrong'
-                    guess_value = 'N/A'
-
-                result['字段'].append({
-                    '名称': field,
-                    '值': guess_value,
-                    '状态': status
-                })
-
-            guesses.append(result)
-            session['guesses'] = guesses
-            current_attempt += 1
-
-    return render_template('index.html',
-                          guesses=guesses,
-                          attempts=f"{current_attempt}/{max_attempts}",
-                          max_attempts=max_attempts,
-                          has_won=check_win(guesses),
-                          has_failed=session.pop('has_failed', False),
-                          has_surrendered=session.pop('has_surrendered', False),
-                          answer_name=session['answer']['英雄名'],
-                          answer_fields=answer_fields,
-                          image_folder='date')
-
-
-
+def lol_index():
+    """英雄联盟游戏页面"""
+    if 'username' not in session:
+        flash('请先登录！', 'error')
+        return redirect(url_for('login'))
+    
+    # 获取最新的用户数据
+    username = session['username']
+    user = user_manager.get_user_data(username)
+    session['user_data'] = user
+    
+    result = lol_game(check_win, new_round, session['user_data'])
+    
+    # 如果游戏结束，更新用户数据
+    if session.get('has_won') or session.get('has_surrendered') or session.get('has_failed'):
+        game_won = session.get('has_won', False)
+        user_manager.update_game_stats(username, 'lol', game_won)
+        session['user_data'] = user_manager.get_user_data(username)
+    
+    # 获取排行榜数据
+    leaderboard_data = user_manager.get_leaderboard(session.get('game_mode', 'all'))
+    
+    # 如果结果是响应对象，直接返回
+    if hasattr(result, '_status_code'):
+        return result
+    
+    # 获取排行榜数据
+    leaderboard_data = user_manager.get_leaderboard(session.get('game_mode', 'all'))
+    
+    # 添加排行榜数据并返回
+    if isinstance(result, dict):
+        result['leaderboard'] = leaderboard_data[:10]
+        return render_template('index.html', **result)
+    else:
+        return result
+    return render_template('index.html', **result)
+    
+    # 否则添加排行榜数据并返回
+    result['leaderboard'] = leaderboard_data[:10]
+    return render_template('index.html', **result)
 
 @app.route('/wangzhe', methods=['GET', 'POST'])
-def index():
-    if 'answer' not in session:
-        new_round()
+def wangzhe_index():
+    """王者荣耀游戏页面"""
+    if 'username' not in session:
+        flash('请先登录！', 'error')
+        return redirect(url_for('login'))
     
-    df = pd.read_excel('heroes.xlsx')
-    df.columns = df.columns.str.strip()  # 去除列名空格
-    HERO_NAMES = df['英雄名'].tolist()
-    FIELDS = [
-    '职业', '种族','性别','阵营',  '区域', '城市' ,'身高(cm)', '皮肤数量',
-    '上线时间'
-    ]
-    message = ''
-    guesses = session.get('guesses', [])
-    max_attempts = session.get('max_attempts', 5)
-    current_attempt = len(guesses)
-    answer_fields = []
-    has_failed = False
-
-    # 检查是否失败（超过最大尝试次数）
-    if current_attempt >= max_attempts and not check_win(guesses):
-        has_failed = True
-        session['has_failed'] = True
-
-    # 准备正确答案的字段数据（失败或投降时显示）
-    if session.get('has_failed', False) or session.get('has_surrendered', False):
-        answer_data = session['answer']
-        for field in FIELDS:
-            answer_fields.append({
-                '名称': field,
-                '值': answer_data.get(field, 'N/A')
-            })
-
-    if request.method == 'POST':
-        guess_name = request.form['hero'].strip()
-        if guess_name not in HERO_NAMES:
-            message = f"英雄 [{guess_name}] 不存在。"
-        else:
-            guess_data = df[df['英雄名'] == guess_name].iloc[0].to_dict()
-            answer_data = session['answer']
-
-            result = {
-                '英雄名': guess_name,
-                '字段': []
-            }
-
-            for field in FIELDS:
-                try:
-                    guess_value = guess_data[field]
-                    answer_value = answer_data[field]
-
-                    if guess_value == answer_value:
-                        status = 'correct'
-                    elif isinstance(answer_value, (int, float)) and isinstance(guess_value, (int, float)):
-                        status = 'up' if guess_value < answer_value else 'down'
-                    else:
-                        status = 'wrong'
-                except KeyError:
-                    status = 'wrong'
-                    guess_value = 'N/A'
-
-                result['字段'].append({
-                    '名称': field,
-                    '值': guess_value,
-                    '状态': status
-                })
-
-            guesses.append(result)
-            session['guesses'] = guesses
-            current_attempt += 1
-    return render_template('index.html',
-                          guesses=guesses,
-                          attempts=f"{current_attempt}/{max_attempts}",
-                          max_attempts=max_attempts,
-                          has_won=check_win(guesses),
-                          has_failed=session.pop('has_failed', False),
-                          has_surrendered=session.pop('has_surrendered', False),
-                          answer_name=session['answer']['英雄名'],
-                          answer_fields=answer_fields,
-                          image_folder='date')
-
-
+    # 获取最新的用户数据
+    username = session['username']
+    user = user_manager.get_user_data(username)
+    session['user_data'] = user
+    
+    result = wangzhe_game(check_win, new_round, session['user_data'])
+    
+    # 如果游戏结束，更新用户数据
+    if session.get('has_won') or session.get('has_surrendered') or session.get('has_failed'):
+        game_won = session.get('has_won', False)
+        user_manager.update_game_stats(username, 'wangzhe', game_won)
+        session['user_data'] = user_manager.get_user_data(username)
+    
+    return result
 
 @app.route('/start', methods=['POST'])
-# def start():
-#     max_attempts = int(request.form.get('max_attempts', 10))
-#     session['max_attempts'] = max_attempts
-#     new_round()
-#     return jsonify({'success': True})
 def start():
+    """开始新游戏"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': '请先登录！'})
+    
     max_attempts = int(request.form.get('max_attempts', 5))
     session['max_attempts'] = max_attempts
     
@@ -331,94 +225,88 @@ def start():
     session.pop('guesses', None)
     session.pop('has_surrendered', None)
     session.pop('has_failed', None)
+    session.pop('has_won', None)
     
     # 开始新游戏
     new_round()
     
     return jsonify({'success': True})
 
-
 @app.route('/surrender', methods=['POST'])
 def surrender():
+    """投降功能"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': '请先登录！'})
+    
     session['has_surrendered'] = True
+    
+    # 更新用户游戏数据
+    username = session['username']
+    game_mode = session.get('game_mode', 'wangzhe')
+    user_manager.update_game_stats(username, game_mode, False)
+    session['user_data'] = user_manager.get_user_data(username)
+    
     return jsonify({'success': True})
-
-
-# @app.route('/autocomplete')
-# def autocomplete():
-#     if session['game_mode'] == 'lol':
-#         df = pd.read_excel('heroes_lol.xlsx')
-#         df.columns = df.columns.str.strip()  # 去除列名空格
-#         HERO_NAMES = df['英雄名'].tolist()
-#         prefix = request.args.get('prefix', '').strip()
-#         matches = [name for name in HERO_NAMES if name.startswith(prefix)]
-#         return jsonify(matches[:10])  # 返回前10个匹配项
-#     else:
-#         df = pd.read_excel('heroes.xlsx')
-#         df.columns = df.columns.str.strip()  # 去除列名空格
-#         HERO_NAMES = df['英雄名'].tolist()
-#         prefix = request.args.get('prefix', '').strip()
-#         matches = [name for name in HERO_NAMES if name.startswith(prefix)]
-#         return jsonify(matches[:10])  # 返回前10个匹配项
 
 @app.route('/autocomplete')
 def autocomplete():
-    if session['game_mode'] == 'lol':
-        df = pd.read_excel('heroes_lol.xlsx')
-        df.columns = df.columns.str.strip()  # 去除列名空格
-        
-        # 合并 英雄名、称号 和 英文名 列为一个统一的列表
-        HERO_NAMES = df['英雄名'].tolist() + df['称号'].tolist() + df['外号'].tolist() + df['英文名'].tolist()
-        
-        prefix = request.args.get('prefix', '').strip()
-        
-        # 匹配输入的前缀
-        matches = [name for name in HERO_NAMES if name.startswith(prefix)]
-        
-        return jsonify(matches[:10])  # 返回前10个匹配项
+    """英雄名称自动完成功能"""
+    prefix = request.args.get('prefix', '').strip()
+    
+    if session.get('game_mode') == 'lol':
+        matches = lol_autocomplete(prefix)
     else:
-        df = pd.read_excel('heroes.xlsx')
-        df.columns = df.columns.str.strip()  # 去除列名空格
+        matches = wangzhe_autocomplete(prefix)
         
-        # 合并 英雄名、称号 和 英文名 列为一个统一的列表
-        HERO_NAMES = df['英雄名'].tolist()
-        
-        prefix = request.args.get('prefix', '').strip()
-        
-        # 匹配输入的前缀
-        matches = [name for name in HERO_NAMES if name.startswith(prefix)]
-        
-        return jsonify(matches[:10])  # 返回前10个匹配项
+    return jsonify(matches)
 
-
-
-# def new_round():
-#     hero = df.sample().iloc[0].to_dict()
-#     session['answer'] = hero
-#     session['guesses'] = []
-#     session['has_surrendered'] = False
-#     session['has_failed'] = False
+@app.route('/leaderboard')
+def leaderboard():
+    """排行榜页面"""
+    if 'username' not in session:
+        flash('请先登录！', 'error')
+        return redirect(url_for('login'))
+    
+    game_mode = request.args.get('mode', 'all')
+    leaderboard_data = user_manager.get_leaderboard(game_mode)
+    return render_template('leaderboard.html', 
+                         leaderboard=leaderboard_data,
+                         game_mode=game_mode,
+                         user=session.get('user_data'))
 
 def new_round():
+    """开始新一轮游戏，根据当前游戏模式选择相应的游戏"""
     game_mode = session.get('game_mode', 'wangzhe')  # 默认为王者荣耀
     
     if game_mode == 'lol':
-        df = pd.read_excel('heroes_lol.xlsx')
+        hero = new_lol_round()
     else:
-        df = pd.read_excel('heroes.xlsx')
+        hero = new_wangzhe_round()
         
-    hero = df.sample().iloc[0].to_dict()
     session['answer'] = hero
     session['guesses'] = []
     session['has_surrendered'] = False
     session['has_failed'] = False
-
+    session['has_won'] = False
 
 def check_win(guesses):
+    """检查是否猜对了所有字段"""
     if not guesses:
         return False
-    return all(field['状态'] == 'correct' for field in guesses[-1]['字段'])
-
+    
+    is_win = all(field['状态'] == 'correct' for field in guesses[-1]['字段'])
+    
+    if is_win:
+        session['has_won'] = True
+        
+        # 更新用户游戏数据
+        if 'username' in session:
+            username = session['username']
+            game_mode = session.get('game_mode', 'wangzhe')
+            user_manager.update_game_stats(username, game_mode, True)
+            session['user_data'] = user_manager.get_user_data(username)
+    
+    return is_win
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0',debug=True, use_reloader=False,port=50050)
+    app.run(host='0.0.0.0', debug=True, use_reloader=False, port=50050)

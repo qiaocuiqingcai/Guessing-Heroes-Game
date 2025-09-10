@@ -1,217 +1,478 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-    <meta charset="UTF-8">
-    <title>猜英雄</title>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <style>
-        /* 设置按钮的位置 */
-        .open-button {
-            position: fixed;  /* 固定定位 */
-            top: 20px;        /* 距离顶部20px */
-            right: 20px;      /* 距离右边20px */
-            padding: 10px 20px; /* 按钮的内边距 */
-            background-color: #ffa1c0; /* 按钮背景色 */
-            color: white;     /* 按钮文字颜色 */
-            border: none;     /* 去除按钮边框 */
-            border-radius: 10px; /* 圆角 */
-            cursor: pointer;  /* 鼠标悬停时显示手指 */
-            font-size: 11px;   /* 字体大小 */
-        }
+{% extends "base.html" %}
 
-        .open-button:hover {
-            background-color: #45a049; /* 鼠标悬停时按钮背景色 */
-        }
-    </style>
-    <style>
-        body {
-            font-family: sans-serif;
-            background-color: #f0f2f5;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 30px;
-        }
+{% block title %}
+{% if session.game_mode == 'lol' %}
+英雄联盟猜英雄
+{% else %}
+王者荣耀猜英雄
+{% endif %}
+{% endblock %}
 
-        h2 {
-            text-align: center;
-        }
+{% block styles %}
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<style>
+    /* 设置按钮的位置 */
+    .open-button {
+        position: fixed;  /* 固定定位 */
+        top: 20px;        /* 距离顶部20px */
+        right: 20px;      /* 距离右边20px */
+        padding: 10px 20px; /* 按钮的内边距 */
+        background-color: #ffa1c0; /* 按钮背景色 */
+        color: white;     /* 按钮文字颜色 */
+        border: none;     /* 去除按钮边框 */
+        border-radius: 10px; /* 圆角 */
+        cursor: pointer;  /* 鼠标悬停时显示手指 */
+        font-size: 11px;   /* 字体大小 */
+    }
 
-        form {
-            margin: 10px;
-        }
-
-        .guess-box {
-            display: flex;
-            flex-direction: row; /* 横向排列 */
-            align-items: center;
-            justify-content: flex-start;
-            background: white;
-            padding: 10px 20px;
-            margin: 10px 0;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            width: fit-content;
-            gap: 15px; /* 设置卡片之间的间距 */
-        }
-
-        /* 将名字放置在图片上方 */
-        .guess-box .info {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .guess-box img {
-            height: 80px;
-            border-radius: 10px;
-            margin-bottom: 10px; /* 图片下方间距 */
-        }
-
-        .guess-fields {
-            display: flex;
-            display: flex;
-            flex-direction: column; /* 纵向排列 */
-            justify-content: center; /* 垂直居中 */
-            align-items: center; /* 水平居中 */
-            text-align: center; /* 确保文字居中 */
-            flex-direction: row; /* 横向排列字段 */
-            gap: 20px; /* 设置字段间的间距 */
-        }
-
-        .field {
-            display: flex;
-            flex-direction: column; /* 纵向排列 */
-            justify-content: center; /* 垂直居中 */
-            align-items: center; /* 水平居中 */
-            text-align: center; /* 确保文字居中 */
-            padding: 5px 10px;
-            border-radius: 6px;
-        }
-
-        .correct { background-color: #b6fcb6; }
-        .wrong { background-color: #e0e0e0; }
-
-        .up::after { content: " ↑"; color: green; }
-        .down::after { content: " ↓"; color: red; }
-
-        #configForm, #guessForm {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        input[type="text"], input[type="number"] {
-            padding: 5px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-        }
-
-        button {
-            padding: 5px 12px;
-            border: none;
-            border-radius: 5px;
-            background-color: #4caf50;
-            color: white;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background-color: #45a049;
-        }
-
-        #surrenderBtn {
-            background-color: #f44336;
-        }
-
-        #surrenderBtn:hover {
-            background-color: #d32f2f !important;
-        }
-
-        .status {
-            margin-top: 30px;
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-            text-align: center;
-        }
-
-        .celebrate span {
-            font-size: 48px;
-            margin-right: 10px;
-        }
-    </style>
-</head>
-<body>
-    <form action="/switch_mode" method="POST">
-        <button type="submit" name="mode" value="lol" style="font-size: 20px; padding: 13px 26px;background-color: #FF5722;">LOL模式</button>
-        <button type="submit" name="mode" value="wangzhe" style="font-size: 20px; padding: 13px 26px;background-color: #FF5722;">王者模式</button>
-    </form>
-    <button class="open-button" onclick="openNewTab()">作者主页</button>
-    <h1 id="game-title">猜英雄小游戏</h1>
-
-    <script>
-        // 页面加载时检测URL并修改标题
-        document.addEventListener('DOMContentLoaded', function() {
-            const title = document.getElementById('game-title');
-            if (window.location.pathname.includes('/lol')) {
-                title.textContent = '英雄联盟猜英雄小游戏';
-            } else {
-                title.textContent = '王者荣耀猜英雄小游戏';
-            }
-        });
-    </script>
-    <div>制作者：<strong>不爱唠嗑的芒果</strong></div>
+    .open-button:hover {
+        background-color: #45a049; /* 鼠标悬停时按钮背景色 */
+    }
     
-    <div>系统会根据玩家的猜测输入给出反馈：</div>
-    <div>如果猜测与答案匹配，则显示为<span style="color: green;">绿色</span>。否则是<span style="color: grey;">灰色</span></div>
-    <div>如果是数值，则会显示高于（<span style="color: green;">↑</span>）或低于（<span style="color: red;">↓</span>）提示。</div>
+    .game-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    .guess-box {
+        display: flex;
+        flex-direction: row; /* 横向排列 */
+        align-items: center;
+        justify-content: flex-start;
+        background: white;
+        padding: 10px 20px;
+        margin: 10px 0;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        width: fit-content;
+        gap: 15px; /* 设置卡片之间的间距 */
+    }
+
+    /* 将名字放置在图片上方 */
+    .guess-box .info {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .guess-box img {
+        height: 80px;
+        border-radius: 10px;
+        margin-bottom: 10px; /* 图片下方间距 */
+    }
+
+    .guess-fields {
+        display: flex;
+        flex-direction: row; /* 横向排列字段 */
+        gap: 20px; /* 设置字段间的间距 */
+    }
+
+    .field {
+        display: flex;
+        flex-direction: column; /* 纵向排列 */
+        justify-content: center; /* 垂直居中 */
+        align-items: center; /* 水平居中 */
+        text-align: center; /* 确保文字居中 */
+        padding: 5px 10px;
+        border-radius: 6px;
+    }
+
+    .correct { background-color: #b6fcb6; }
+    .wrong { background-color: #e0e0e0; }
+
+    .up::after { content: " ↑"; color: green; }
+    .down::after { content: " ↓"; color: red; }
+
+    #configForm, #guessForm {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin: 20px 0;
+    }
+    
+    #guessForm {
+        padding: 20px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        width: 100%;
+    }
+
+    .form-inner {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+    }
+
+    input[type="text"], input[type="number"] {
+        padding: 12px;
+        font-size: 16px;
+        width: 300px;
+        border: 2px solid #ccc;
+        border-radius: 8px;
+    }
+
+    .game-btn {
+        padding: 12px 24px;
+        font-size: 28px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        color: white;
+    }
+
+    .submit-btn {
+        background-color: #00aeec;
+    }
+
+    .surrender-btn {
+        background-color: #f44336;
+    }
+
+    .start-btn {
+        padding: 12px 24px;
+        font-size: 36px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+    .status {
+        margin-top: 30px;
+        font-size: 24px;
+        font-weight: bold;
+        color: #333;
+        text-align: center;
+    }
+
+    .celebrate span {
+        font-size: 48px;
+        margin-right: 10px;
+    }
+    
+    .mode-switch {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    
+    .mode-btn {
+        font-size: 20px;
+        padding: 13px 26px;
+        background-color: #FF5722;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+    
+    /* 用户信息面板 */
+    .user-panel {
+        position: fixed;
+        top: 80px;
+        left: 20px;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        padding: 15px;
+        z-index: 100;
+        width: 200px;
+    }
+    
+    .user-panel h3 {
+        margin-top: 0;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+        font-size: 16px;
+    }
+    
+    .user-stats {
+        margin-top: 10px;
+    }
+    
+    .user-stats p {
+        margin: 5px 0;
+        font-size: 14px;
+    }
+    
+    .user-actions {
+        margin-top: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .user-actions a {
+        text-align: center;
+        padding: 8px;
+        background-color: #f0f2f5;
+        border-radius: 4px;
+        text-decoration: none;
+        color: #333;
+        transition: background-color 0.3s;
+        font-size: 14px;
+    }
+    
+    .user-actions a:hover {
+        background-color: #e0e0e0;
+    }
+    
+    /* 排行榜样式 */
+    .leaderboard-panel {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        padding: 15px;
+        z-index: 100;
+        width: 250px;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    
+    .leaderboard-panel h3 {
+        margin-top: 0;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+        font-size: 16px;
+    }
+    
+    .leaderboard-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+    
+    .leaderboard-table th {
+        text-align: left;
+        padding: 8px;
+        background-color: #f5f5f5;
+    }
+    
+    .leaderboard-table td {
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .leaderboard-table tr:last-child td {
+        border-bottom: none;
+    }
+    
+    .leaderboard-avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        margin-right: 8px;
+        vertical-align: middle;
+    }
+    
+    .leaderboard-link {
+        display: block;
+        text-align: center;
+        margin-top: 10px;
+        padding: 8px;
+        background-color: #f0f2f5;
+        border-radius: 4px;
+        text-decoration: none;
+        color: #333;
+        transition: background-color 0.3s;
+    }
+    
+    .leaderboard-link:hover {
+        background-color: #e0e0e0;
+    }
+    
+    .game-instructions {
+        margin: 20px 0;
+        padding: 15px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="game-container">
+    <!-- 排行榜面板 -->
+    {% if leaderboard %}
+    <div class="leaderboard-panel">
+        <h3>排行榜</h3>
+        <table class="leaderboard-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>玩家</th>
+                    <th>次数</th>
+                    <th>准确率</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in leaderboard %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>
+                        <img src="{{ url_for('static', filename='avatars/' + player.username + '.jpg') }}" 
+                             alt="{{ player.username }}" 
+                             class="leaderboard-avatar"
+                             onerror="this.src='{{ url_for('static', filename='avatars/default.jpg') }}'">
+                        {{ player.username }}
+                    </td>
+                    <td>{{ player.total_games }}</td>
+                    <td>{{ "%.1f"|format(player.win_rate * 100) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <a href="{{ url_for('leaderboard') }}" class="leaderboard-link">查看完整排行榜</a>
+    </div>
+    {% endif %}
+
+    <!-- 用户信息面板 -->
+    {% if session.username and session.user_data %}
+    <div class="user-panel">
+        <h3>{{ session.username }}</h3>
+        <div class="user-stats">
+            <p><strong>总游戏:</strong> {{ session.user_data.total_games }}</p>
+            <p><strong>胜率:</strong> 
+                {% if session.user_data.total_games > 0 %}
+                    {{ (session.user_data.win_games / session.user_data.total_games * 100) | round(2) }}%
+                {% else %}
+                    0%
+                {% endif %}
+            </p>
+            {% if session.game_mode == 'lol' %}
+            <p><strong>LOL胜率:</strong> 
+                {% if session.user_data.lol_games > 0 %}
+                    {{ (session.user_data.lol_wins / session.user_data.lol_games * 100) | round(2) }}%
+                {% else %}
+                    0%
+                {% endif %}
+            </p>
+            {% else %}
+            <p><strong>王者胜率:</strong> 
+                {% if session.user_data.wangzhe_games > 0 %}
+                    {{ (session.user_data.wangzhe_wins / session.user_data.wangzhe_games * 100) | round(2) }}%
+                {% else %}
+                    0%
+                {% endif %}
+            </p>
+            {% endif %}
+            
+            <!-- 排行榜信息 -->
+            <div class="leaderboard-info">
+                <h4>排行榜</h4>
+                {% if leaderboard %}
+                    {% set user_rank = namespace(value=0) %}
+                    {% set has_user_in_top10 = namespace(value=false) %}
+                    
+                    {% for i, player in enumerate(leaderboard) %}
+                        {% if player.username == session.username %}
+                            {% set user_rank.value = i+1 %}
+                            {% if loop.index <= 10 %}
+                                {% set has_user_in_top10.value = true %}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if leaderboard|length > 0 %}
+                        {% for i, player in enumerate(leaderboard) if loop.index <= 10 %}
+                        <p>
+                            {{ loop.index }}. {{ player.username }} 
+                            ({{ player.total_games }}局, {{ "%.1f"|format(player.win_rate * 100) }}%)
+                        </p>
+                        {% endfor %}
+                        
+                        {% if not has_user_in_top10.value and user_rank.value > 0 %}
+                            <p>...</p>
+                            <p>
+                                {{ user_rank.value }}. {{ session.username }} 
+                                ({{ session.user_data.total_games }}局, 
+                                {% if session.user_data.total_games > 0 %}
+                                    {{ (session.user_data.win_games / session.user_data.total_games * 100) | round(2) }}%
+                                {% else %}
+                                    0%
+                                {% endif %})
+                            </p>
+                        {% endif %}
+                    {% else %}
+                        <p>暂无排行榜数据</p>
+                    {% endif %}
+                    
+                    <p><strong>您的排名:</strong> 
+                        {% if user_rank.value <= 50 %}
+                            {{ user_rank.value }}
+                        {% else %}
+                            前{{ (user_rank.value / leaderboard|length * 100) | round }}%
+                        {% endif %}
+                    </p>
+                {% else %}
+                    <p>暂无排行榜数据</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="user-actions">
+            <a href="{{ url_for('user_profile') }}">查看详细数据</a>
+            <a href="{{ url_for('wangzhe_index') }}">返回游戏</a>
+            <a href="{{ url_for('leaderboard') }}">查看完整排行榜</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="mode-switch">
+        <form action="/switch_mode" method="POST">
+            <button type="submit" name="mode" value="lol" class="mode-btn">LOL模式</button>
+            <button type="submit" name="mode" value="wangzhe" class="mode-btn">王者模式</button>
+        </form>
+    </div>
+    
+    <button class="open-button" onclick="openNewTab()">作者主页</button>
+    
+    <h1 id="game-title">
+        {% if session.game_mode == 'lol' %}
+        英雄联盟猜英雄小游戏
+        {% else %}
+        王者荣耀猜英雄小游戏
+        {% endif %}
+    </h1>
+    
+    <div class="game-instructions">
+        <div>制作者：<strong>不爱唠嗑的芒果</strong></div>
+        <div>系统会根据玩家的猜测输入给出反馈：</div>
+        <div>如果猜测与答案匹配，则显示为<span style="color: green;">绿色</span>。否则是<span style="color: grey;">灰色</span></div>
+        <div>如果是数值，则会显示高于（<span style="color: green;">↑</span>）或低于（<span style="color: red;">↓</span>）提示。</div>
+    </div>
 
     <form id="configForm">
-        <!-- 设置猜测次数： -->
-        <!-- <input type="number" name="max_attempts" value="{{ max_attempts }}" min="1" autocomplete="off"> -->
-        <!-- <button type="submit">开始游戏/重新开始</button> -->
-        <button type="submit" style="padding: 12px 24px; font-size: 36px; background-color: #4caf50; color: white; border: none; border-radius: 8px; cursor: pointer;">
+        <button type="submit" class="start-btn">
             开始游戏/重新开始
         </button>
-        
     </form>
 
-    <!-- <form method="POST" id="guessForm">
-        <input id="heroInput" name="hero" list="heroList" placeholder="请输入猜测的英雄名" autocomplete="off">
-        <datalist id="heroList"></datalist>
-        <button type="submit">确定</button>
-        <button type="button" id="surrenderBtn">公布答案</button>
-    </form> -->
-    <form method="POST" id="guessForm" style="margin: 20px 0; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-        <div style="display: flex; gap: 15px; align-items: center; justify-content: center;">
-            <input id="heroInput" name="hero" list="heroList" placeholder="" autocomplete="off" 
-                   style="padding: 12px; font-size: 16px; width: 300px; border: 2px solid #ccc; border-radius: 8px;">
+    <form method="POST" id="guessForm">
+        <div class="form-inner">
+            <input id="heroInput" name="hero" list="heroList" placeholder="" autocomplete="off">
             <datalist id="heroList"></datalist>
-            <button type="submit" style="padding: 12px 24px; font-size: 28px; background-color: #00aeec; color: white; border: none; border-radius: 8px; cursor: pointer;">
+            <button type="submit" class="game-btn submit-btn">
                 确定
             </button>
-            <button type="button" id="surrenderBtn" style="padding: 12px 24px; font-size: 28px; background-color: #f44336; color: white; border: none; border-radius: 8px; cursor: pointer;">
+            <button type="button" id="surrenderBtn" class="game-btn surrender-btn">
                 投降<span>🏳️</span>
             </button>
         </div>
     </form>
     
-    <script>
-        // 页面加载时设置placeholder
-        document.addEventListener('DOMContentLoaded', function() {
-            const heroInput = document.getElementById('heroInput');
-            
-            // 检查当前URL路径
-            if (window.location.pathname.includes('/lol')) {
-                heroInput.placeholder = "请输入猜测的英雄，如小炮，安妮";
-            } else {
-                heroInput.placeholder = "请输入猜测的英雄名，如小乔";
-            }
-        });
-    </script>
-
     <p>本轮尝试次数：{{ attempts }}</p>
 
     {% if has_surrendered %}
@@ -256,8 +517,6 @@
     </div>
     {% endif %}
 
-    
-
     {% for guess in guesses|reverse %}
     <div class="guess-box">
         <div class="info">
@@ -288,69 +547,60 @@
         });
     </script>
     {% endif %}
+</div>
+{% endblock %}
 
-    <script>
-        const input = document.getElementById("heroInput");
-        const datalist = document.getElementById("heroList");
-
-        let debounceTimeout;
-        input.addEventListener("input", () => {
-            clearTimeout(debounceTimeout);
-            debounceTimeout = setTimeout(() => {
-                const prefix = input.value;
-                axios.get(`/autocomplete?prefix=${prefix}`).then(res => {
-                    datalist.innerHTML = "";
-                    res.data.forEach(name => {
-                        const option = document.createElement("option");
-                        option.value = name;
-                        datalist.appendChild(option);
-                    });
-                });
-            }, 300);  // 300毫秒的延迟
-        });
-
-        // document.getElementById("configForm").addEventListener("submit", e => {
-        //     e.preventDefault();
-        //     const formData = new FormData(e.target);
-        //     axios.post("/start", formData).then(() => location.reload());
-        // });
-            
-        document.getElementById("surrenderBtn").addEventListener("click", () => {
-            if(confirm("确定要投降吗？将直接显示正确答案。")) {
-                axios.post("/surrender").then(() => location.reload());
-            }
-        });
-    </script>
-        <script>
-            function openNewTab() {
-                // 在新标签页打开指定的网址
-                window.open('https://space.bilibili.com/52034298', '_blank');
-            }
-        </script>
-        <script>
-            document.getElementById("guessForm").addEventListener("submit", function (e) {
-                // 允许正常提交（POST 到后端）
-                setTimeout(() => {
-                    document.getElementById("heroInput").focus();
-                }, 100);  // 使用 setTimeout 是为了确保页面渲染完后重新聚焦
-            });
-        </script>
-   <!-- <script>
-    document.getElementById("configForm").addEventListener("submit", function(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        
-        // 清空英雄输入框
-        document.getElementById("heroInput").value = "0";
-        
-        // 提交表单并刷新页面
-        axios.post("/start", formData).then(() => {
-            location.reload();
-        });
-    });
-</script> -->
-
+{% block scripts %}
 <script>
+    // 页面加载时设置placeholder
+    document.addEventListener('DOMContentLoaded', function() {
+        const heroInput = document.getElementById('heroInput');
+        
+        // 检查当前URL路径
+        if (window.location.pathname.includes('/lol')) {
+            heroInput.placeholder = "请输入猜测的英雄，如小炮，安妮";
+        } else {
+            heroInput.placeholder = "请输入猜测的英雄名，如小乔";
+        }
+    });
+
+    const input = document.getElementById("heroInput");
+    const datalist = document.getElementById("heroList");
+
+    let debounceTimeout;
+    input.addEventListener("input", () => {
+        clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(() => {
+            const prefix = input.value;
+            axios.get(`/autocomplete?prefix=${prefix}`).then(res => {
+                datalist.innerHTML = "";
+                res.data.forEach(name => {
+                    const option = document.createElement("option");
+                    option.value = name;
+                    datalist.appendChild(option);
+                });
+            });
+        }, 300);  // 300毫秒的延迟
+    });
+        
+    document.getElementById("surrenderBtn").addEventListener("click", () => {
+        if(confirm("确定要投降吗？将直接显示正确答案。")) {
+            axios.post("/surrender").then(() => location.reload());
+        }
+    });
+
+    function openNewTab() {
+        // 在新标签页打开指定的网址
+        window.open('https://space.bilibili.com/52034298', '_blank');
+    }
+
+    document.getElementById("guessForm").addEventListener("submit", function (e) {
+        // 允许正常提交（POST 到后端）
+        setTimeout(() => {
+            document.getElementById("heroInput").focus();
+        }, 100);  // 使用 setTimeout 是为了确保页面渲染完后重新聚焦
+    });
+
     document.getElementById("configForm").addEventListener("submit", function(e) {
         e.preventDefault();
         const formData = new FormData(e.target);
@@ -360,11 +610,7 @@
             // 模拟点击"确定"按钮
             document.getElementById("heroInput").value = "";
             document.querySelector("#guessForm button[type='submit']").click();
-            
-        
-            
         });
     });
 </script>
-</body>
-</html>
+{% endblock %}

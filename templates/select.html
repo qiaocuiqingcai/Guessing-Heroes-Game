@@ -1,32 +1,217 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>选择游戏模式</title>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .mode-buttons {
-            display: flex;
-            gap: 20px;
-        }
-        button {
-            padding: 15px 30px;
-            font-size: 18px;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}选择游戏模式{% endblock %}
+
+{% block content %}
+<div class="game-selection">
+    <h2>选择游戏模式</h2>
+    
+    {% if session.username %}
+    <div class="user-info-panel">
+        <h3>{{ session.username }} 的游戏数据</h3>
+        <div class="stats-summary">
+            <div class="stat-item">
+                <span class="stat-label">总游戏次数</span>
+                <span class="stat-value">{{ user.total_games }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">总胜率</span>
+                <span class="stat-value">
+                    {% if user.total_games > 0 %}
+                        {{ (user.win_games / user.total_games * 100) | round(2) }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">LOL模式胜率</span>
+                <span class="stat-value">
+                    {% if user.lol_games > 0 %}
+                        {{ (user.lol_wins / user.lol_games * 100) | round(2) }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">王者模式胜率</span>
+                <span class="stat-value">
+                    {% if user.wangzhe_games > 0 %}
+                        {{ (user.wangzhe_wins / user.wangzhe_games * 100) | round(2) }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+        <div class="user-actions">
+            <a href="{{ url_for('user_profile') }}" class="profile-link">查看详细数据</a>
+        </div>
+    </div>
+    {% endif %}
+    
     <div class="mode-buttons">
-        <form action="/" method="POST">
-            <button type="submit" name="mode" value="lol">LOL模式</button>
-            <button type="submit" name="mode" value="wangzhe">王者模式</button>
+        <form action="{{ url_for('select') }}" method="POST">
+            <button type="submit" name="mode" value="lol" class="mode-btn lol-btn">
+                <span class="mode-icon">🎮</span>
+                <span class="mode-name">英雄联盟模式</span>
+            </button>
+            <button type="submit" name="mode" value="wangzhe" class="mode-btn wangzhe-btn">
+                <span class="mode-icon">👑</span>
+                <span class="mode-name">王者荣耀模式</span>
+            </button>
         </form>
     </div>
-</body>
-</html>
+    
+    <div class="game-info">
+        <h3>游戏说明</h3>
+        <p>猜英雄是一个有趣的猜谜游戏，你需要通过各种线索猜出隐藏的英雄角色。</p>
+        <ul>
+            <li>每次游戏系统会随机选择一个英雄作为答案</li>
+            <li>你可以输入英雄名称进行猜测</li>
+            <li>系统会根据你的猜测给出反馈</li>
+            <li>绿色表示属性完全匹配</li>
+            <li>灰色表示属性不匹配</li>
+            <li>对于数值属性，会显示箭头指示方向</li>
+            <li>在有限次数内猜出正确答案即为胜利</li>
+        </ul>
+    </div>
+</div>
+
+<style>
+    .game-selection {
+        max-width: 800px;
+        margin: 0 auto;
+        text-align: center;
+    }
+    
+    .user-info-panel {
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 30px;
+        text-align: left;
+    }
+    
+    .user-info-panel h3 {
+        margin-top: 0;
+        color: #333;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 10px;
+    }
+    
+    .stats-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+    }
+    
+    .stat-item {
+        background-color: white;
+        border-radius: 6px;
+        padding: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .stat-label {
+        font-size: 14px;
+        color: #666;
+    }
+    
+    .stat-value {
+        font-size: 20px;
+        font-weight: bold;
+        color: #4caf50;
+        margin-top: 5px;
+    }
+    
+    .user-actions {
+        margin-top: 15px;
+        text-align: right;
+    }
+    
+    .profile-link {
+        display: inline-block;
+        padding: 8px 15px;
+        background-color: #4caf50;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        transition: background-color 0.3s;
+    }
+    
+    .profile-link:hover {
+        background-color: #45a049;
+    }
+    
+    .mode-buttons {
+        margin: 40px 0;
+    }
+    
+    .mode-btn {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 200px;
+        height: 200px;
+        margin: 0 15px;
+        border-radius: 15px;
+        border: none;
+        background-color: #fff;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        cursor: pointer;
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+    
+    .mode-btn:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .lol-btn {
+        background: linear-gradient(135deg, #1a2a6c, #b21f1f);
+        color: white;
+    }
+    
+    .wangzhe-btn {
+        background: linear-gradient(135deg, #11998e, #38ef7d);
+        color: white;
+    }
+    
+    .mode-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+    }
+    
+    .mode-name {
+        font-size: 20px;
+        font-weight: bold;
+    }
+    
+    .game-info {
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: left;
+        margin-top: 30px;
+    }
+    
+    .game-info h3 {
+        margin-top: 0;
+        color: #333;
+    }
+    
+    .game-info ul {
+        padding-left: 20px;
+    }
+    
+    .game-info li {
+        margin-bottom: 8px;
+    }
+</style>
+{% endblock %}

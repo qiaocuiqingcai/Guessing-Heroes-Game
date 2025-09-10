@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}管理面板{% endblock %}
+
+{% block content %}
+<div class="admin-panel">
+    <h2>用户管理面板</h2>
+    
+    <div class="user-list">
+        <h3>所有用户</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>用户名</th>
+                    <th>余额</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.money }} 元</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('update_money') }}" class="money-form">
+                            <input type="hidden" name="user_id" value="{{ user.id }}">
+                            <input type="number" name="money" value="{{ user.money }}" step="0.01" min="0" required>
+                            <button type="submit">更新余额</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
