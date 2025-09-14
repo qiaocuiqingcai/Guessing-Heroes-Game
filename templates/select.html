@@ -6,50 +6,6 @@
 <div class="game-selection">
     <h2>选择游戏模式</h2>
     
-    {% if session.username %}
-    <div class="user-info-panel">
-        <h3>{{ session.username }} 的游戏数据</h3>
-        <div class="stats-summary">
-            <div class="stat-item">
-                <span class="stat-label">总游戏次数</span>
-                <span class="stat-value">{{ user.total_games }}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">总胜率</span>
-                <span class="stat-value">
-                    {% if user.total_games > 0 %}
-                        {{ (user.win_games / user.total_games * 100) | round(2) }}%
-                    {% else %}
-                        0%
-                    {% endif %}
-                </span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">LOL模式胜率</span>
-                <span class="stat-value">
-                    {% if user.lol_games > 0 %}
-                        {{ (user.lol_wins / user.lol_games * 100) | round(2) }}%
-                    {% else %}
-                        0%
-                    {% endif %}
-                </span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">王者模式胜率</span>
-                <span class="stat-value">
-                    {% if user.wangzhe_games > 0 %}
-                        {{ (user.wangzhe_wins / user.wangzhe_games * 100) | round(2) }}%
-                    {% else %}
-                        0%
-                    {% endif %}
-                </span>
-            </div>
-        </div>
-        <div class="user-actions">
-            <a href="{{ url_for('user_profile') }}" class="profile-link">查看详细数据</a>
-        </div>
-    </div>
-    {% endif %}
     
     <div class="mode-buttons">
         <form action="{{ url_for('select') }}" method="POST">

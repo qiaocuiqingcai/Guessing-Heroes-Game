@@ -114,9 +114,10 @@
     input[type="text"], input[type="number"] {
         padding: 12px;
         font-size: 16px;
-        width: 300px;
+        width: 100%;
         border: 2px solid #ccc;
         border-radius: 8px;
+        box-sizing: border-box;
     }
 
     .game-btn {
@@ -339,96 +340,7 @@
     </div>
     {% endif %}
 
-    <!-- 用户信息面板 -->
-    {% if session.username and session.user_data %}
-    <div class="user-panel">
-        <h3>{{ session.username }}</h3>
-        <div class="user-stats">
-            <p><strong>总游戏:</strong> {{ session.user_data.total_games }}</p>
-            <p><strong>胜率:</strong> 
-                {% if session.user_data.total_games > 0 %}
-                    {{ (session.user_data.win_games / session.user_data.total_games * 100) | round(2) }}%
-                {% else %}
-                    0%
-                {% endif %}
-            </p>
-            {% if session.game_mode == 'lol' %}
-            <p><strong>LOL胜率:</strong> 
-                {% if session.user_data.lol_games > 0 %}
-                    {{ (session.user_data.lol_wins / session.user_data.lol_games * 100) | round(2) }}%
-                {% else %}
-                    0%
-                {% endif %}
-            </p>
-            {% else %}
-            <p><strong>王者胜率:</strong> 
-                {% if session.user_data.wangzhe_games > 0 %}
-                    {{ (session.user_data.wangzhe_wins / session.user_data.wangzhe_games * 100) | round(2) }}%
-                {% else %}
-                    0%
-                {% endif %}
-            </p>
-            {% endif %}
-            
-            <!-- 排行榜信息 -->
-            <div class="leaderboard-info">
-                <h4>排行榜</h4>
-                {% if leaderboard %}
-                    {% set user_rank = namespace(value=0) %}
-                    {% set has_user_in_top10 = namespace(value=false) %}
-                    
-                    {% for i, player in enumerate(leaderboard) %}
-                        {% if player.username == session.username %}
-                            {% set user_rank.value = i+1 %}
-                            {% if loop.index <= 10 %}
-                                {% set has_user_in_top10.value = true %}
-                            {% endif %}
-                        {% endif %}
-                    {% endfor %}
-                    
-                    {% if leaderboard|length > 0 %}
-                        {% for i, player in enumerate(leaderboard) if loop.index <= 10 %}
-                        <p>
-                            {{ loop.index }}. {{ player.username }} 
-                            ({{ player.total_games }}局, {{ "%.1f"|format(player.win_rate * 100) }}%)
-                        </p>
-                        {% endfor %}
-                        
-                        {% if not has_user_in_top10.value and user_rank.value > 0 %}
-                            <p>...</p>
-                            <p>
-                                {{ user_rank.value }}. {{ session.username }} 
-                                ({{ session.user_data.total_games }}局, 
-                                {% if session.user_data.total_games > 0 %}
-                                    {{ (session.user_data.win_games / session.user_data.total_games * 100) | round(2) }}%
-                                {% else %}
-                                    0%
-                                {% endif %})
-                            </p>
-                        {% endif %}
-                    {% else %}
-                        <p>暂无排行榜数据</p>
-                    {% endif %}
-                    
-                    <p><strong>您的排名:</strong> 
-                        {% if user_rank.value <= 50 %}
-                            {{ user_rank.value }}
-                        {% else %}
-                            前{{ (user_rank.value / leaderboard|length * 100) | round }}%
-                        {% endif %}
-                    </p>
-                {% else %}
-                    <p>暂无排行榜数据</p>
-                {% endif %}
-            </div>
-        </div>
-        <div class="user-actions">
-            <a href="{{ url_for('user_profile') }}">查看详细数据</a>
-            <a href="{{ url_for('wangzhe_index') }}">返回游戏</a>
-            <a href="{{ url_for('leaderboard') }}">查看完整排行榜</a>
-        </div>
-    </div>
-    {% endif %}
+    
 
     <div class="mode-switch">
         <form action="/switch_mode" method="POST">
